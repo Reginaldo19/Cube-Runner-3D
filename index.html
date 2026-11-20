@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#050510">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cube Runner 3D</title>
+<link rel="icon" type="image/png" href="runner.png">
+<link rel="apple-touch-icon" href="runner.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --primary: #00ffff;
+    --magenta: #ff00ff;
+    --warning: #ffaa00;
+    --danger: #ff0044;
+    --bg-dark: #050510;
+    --panel-bg: rgba(5, 10, 20, 0.6);
+    --text-light: #ffffff;
+    --text-dim: #aabbcc;
+    --font-display: 'Orbitron', sans-serif;
+    --font-ui: 'Rajdhani', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    overflow: hidden;
+    background: #000;
+    font-family: var(--font-ui);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    height: 100%;
+    width: 100%;
+  }
+  canvas { display: block; }
+
+  /* ===================== LOADING SCREEN ===================== */
+  #loading {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-dark);
+    transition: opacity 0.6s ease, visibility 0.6s;
+  }
+  #loading.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+  .loader-ring {
+    display: inline-block;
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin-bottom: 30px;
+  }
+  .loader-ring div {
+    box-sizing: border-box;
+    display: block;
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    margin: 8px;
+    border: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: loaderSpin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+    border-color: var(--primary) transparent transparent transparent;
+    box-shadow: 0 0 15px var(--primary);
+  }
+  .loader-ring div:nth-child(1) { animation-delay: -0.45s; border-color: var(--magenta) transparent transparent transparent; box-shadow: 0 0 15px var(--magenta); }
+  .loader-ring div:nth-child(2) { animation-delay: -0.3s; border-color: var(--warning) transparent transparent transparent; box-shadow: 0 0 15px var(--warning); }
+  .loader-ring div:nth-child(3) { animation-delay: -0.15s; }
+  @keyframes loaderSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .loading-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    letter-spacing: 6px;
+    color: #fff;
+    text-shadow: 0 0 10px var(--primary), 0 0 20px var(--primary);
+    margin-bottom: 20px;
+    font-weight: 900;
+  }
+  .loading-bar-container {
+    width: 200px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .loading-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    box-shadow: 0 0 10px var(--primary);
+    transition: width 0.2s ease;
+  }
+  .loading-text {
+    margin-top: 15px;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ===================== HUD ===================== */
+  #hud {
+    position: fixed;
+    top: max(15px, env(safe-area-inset-top));
+    left: 15px;
+    right: 15px;
+    color: #fff;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  #hud.active { opacity: 1; }
+  
+  .hud-panel {
+    background: var(--panel-bg);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .hud-left { align-items: flex-start; border-left: 3px solid var(--primary); }
+  .hud-right { align-items: flex-end; border-right: 3px solid var(--warning); }
+
+  .hud-value { font-family: var(--font-display); font-size: 22px; font-weight: 700; line-height: 1.1; }
+  .hud-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); font-weight: 600; }
+  
+  .text-cyan { color: var(--primary); text-shadow: 0 0 8px rgba(0,255,255,0.5); }
+  .text-yellow { color: var(--warning); text-shadow: 0 0 8px rgba(255,170,0,0.5); }
+
+  /* ===================== BUTTONS ===================== */
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--panel-bg);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    color: var(--primary);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    cursor: pointer;
+    touch-action: manipulation;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.2s;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+  }
+  .icon-btn:active { transform: scale(0.9); background: rgba(0, 255, 255, 0.2); box-shadow: 0 0 20px rgba(0,255,255,0.4); }
+  
+  #pauseBtn { position: fixed; right: 15px; top: max(95px, calc(env(safe-area-inset-top) + 80px)); }
+  #restartBtn { position: fixed; right: 65px; top: max(95px, calc(env(safe-area-inset-top) + 80px)); }
+  #audioBtn { position: fixed; left: 15px; top: max(95px, calc(env(safe-area-inset-top) + 80px)); }
+  
+  .hidden { display: none !important; }
+
+  /* ===================== MODALS ===================== */
+  .modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(3, 5, 10, 0.85);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    padding: 20px;
+  }
+  .modal.active { opacity: 1; visibility: visible; }
+  
+  .modal-content {
+    background: #0a0f1c;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 20px;
+    padding: 25px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 255, 0.1);
+    transform: translateY(15px);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal.active .modal-content { transform: translateY(0); }
+
+  .modal h2 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    margin-bottom: 20px;
+    text-align: center;
+    color: var(--text-light);
+    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+    width: 100%;
+  }
+  
+  .btn {
+    width: 100%;
+    padding: 15px;
+    border-radius: 10px;
+    border: none;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s;
+    margin-bottom: 10px;
+    touch-action: manipulation;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .btn:active { transform: scale(0.96); }
+  
+  .btn-primary { background: var(--primary); color: #000; box-shadow: 0 0 15px rgba(0,255,255,0.4); }
+  .btn-danger { background: var(--danger); box-shadow: 0 0 15px rgba(255,0,68,0.4); }
+  .btn-ghost { background: transparent; border: 1px solid rgba(255, 255, 255, 0.2); color: var(--text-light); }
+
+  /* ===================== MENU ===================== */
+  #menu {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.4s;
+  }
+  #menu.hidden { opacity: 0; pointer-events: none; }
+  
+  #menuCubeCanvas {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.9;
+  }
+
+  .menu-ui {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 380px;
+    padding: 20px;
+  }
+
+  .menu-logo {
+    font-family: var(--font-display);
+    font-size: clamp(32px, 10vw, 48px);
+    font-weight: 900;
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: 30px;
+    color: #fff;
+    text-shadow: 0 0 15px var(--primary), 0 0 30px var(--primary);
+  }
+  .menu-logo span {
+    display: block;
+    font-size: 13px;
+    letter-spacing: 6px;
+    color: var(--primary);
+    font-family: var(--font-ui);
+    font-weight: 700;
+    margin-top: 8px;
+    text-shadow: 0 0 10px var(--primary);
+  }
+
+  .menu-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .btn-play {
+    background: linear-gradient(90deg, var(--primary), #00ffaa);
+    color: #000;
+    font-size: 20px;
+    padding: 16px;
+    border-radius: 50px;
+    font-weight: 900;
+    box-shadow: 0 0 25px rgba(0, 255, 255, 0.5);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-play:active { transform: scale(0.95); box-shadow: 0 0 40px rgba(0, 255, 255, 0.8); }
+
+  .menu-stats {
+    margin-top: 25px;
+    display: flex;
+    gap: 30px;
+    background: var(--panel-bg);
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .stat-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .stat-box .val { font-family: var(--font-display); font-size: 18px; color: var(--warning); text-shadow: 0 0 10px rgba(255,170,0,0.5); }
+  .stat-box .lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+
+  /* Game Over specific */
+  .go-score { font-family: var(--font-display); font-size: 54px; color: var(--primary); text-shadow: 0 0 20px var(--primary); line-height: 1; margin: 5px 0 10px; }
+  .go-record { font-size: 14px; color: var(--warning); display: flex; align-items: center; gap: 6px; margin-bottom: 20px; text-shadow: 0 0 8px rgba(255,170,0,0.4); }
+  .go-stats-row { display: flex; width: 100%; justify-content: space-between; margin-bottom: 20px; padding: 12px; background: rgba(0,255,255,0.05); border-radius: 12px; border: 1px solid rgba(0,255,255,0.1); }
+  .go-stat { display: flex; flex-direction: column; }
+  .go-stat span:first-child { font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; }
+  .go-stat span:last-child { font-family: var(--font-display); font-size: 16px; color: #fff; }
+
+  /* Help specific */
+  .help-item { display: flex; gap: 15px; margin-bottom: 15px; text-align: left; width: 100%; }
+  .help-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(0, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--primary); font-size: 18px; border: 1px solid rgba(0, 255, 255, 0.2); }
+  .help-text h4 { font-family: var(--font-ui); font-weight: 700; font-size: 15px; color: #fff; margin-bottom: 2px; }
+  .help-text p { font-size: 13px; color: var(--text-dim); line-height: 1.4; font-weight: 500; }
+
+  /* ===================== SKINS TELA CHEIA ===================== */
+  #screenSkins {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(5, 8, 15, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s;
+  }
+  #screenSkins.active { opacity: 1; visibility: visible; }
+  
+  .skins-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    z-index: 10;
+  }
+  .skins-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--primary);
+    text-shadow: 0 0 10px rgba(0,255,255,0.5);
+  }
+  .skins-currency {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--warning);
+    background: rgba(255,170,0,0.1);
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,170,0,0.3);
+  }
+  .skins-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .skins-list {
+    width: 45%;
+    overflow-y: auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .skins-list::-webkit-scrollbar { width: 4px; }
+  .skins-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+  
+  .skin-btn {
+    background: rgba(255,255,255,0.03);
+    border: 2px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .skin-btn:active { transform: scale(0.97); }
+  .skin-btn.active { border-color: var(--primary); background: rgba(0,255,255,0.1); }
+  .skin-btn.locked { opacity: 0.6; }
+  
+  .skin-btn-preview {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px currentColor;
+  }
+  .skin-btn-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .skin-btn-name {
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: #fff;
+  }
+  .skin-btn-price {
+    font-size: 12px;
+    color: var(--warning);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .skin-btn-price.equipped { color: var(--primary); }
+  .skin-btn-price.owned { color: #00ffaa; }
+  
+  .skin-preview-panel {
+    width: 55%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid rgba(255,255,255,0.05);
+  }
+  #skinPreviewCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .skin-preview-info {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    text-align: center;
+    background: rgba(5,8,15,0.8);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(5px);
+  }
+  .skin-preview-name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: #fff;
+    margin-bottom: 5px;
+  }
+  .skin-preview-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 15px;
+  }
+  .skin-action-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    color: #000;
+    background: var(--primary);
+    box-shadow: 0 0 15px rgba(0,255,255,0.4);
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .skin-action-btn:active { transform: scale(0.96); }
+  .skin-action-btn:disabled {
+    background: #223;
+    color: #556;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* Botão Voltar na Loja */
+  #btnCloseSkins {
+    position: absolute;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px;
+    z-index: 20;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    left: 22%;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  }
+
+  /* ===================== SCREEN EFFECTS ===================== */
+  #flash {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 90;
+  }
+  #vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="loader-ring"><div></div><div></div><div></div><div></div></div>
+  <div class="loading-title">INITIALIZING</div>
+  <div class="loading-bar-container"><div class="loading-bar" id="loadBar"></div></div>
+  <div class="loading-text" id="loadText">Calibrando...</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-panel hud-left">
+    <div class="hud-label">SCORE</div>
+    <div class="hud-value text-cyan" id="uiScore">0</div>
+    <div class="hud-label" style="margin-top:4px;"><i class="fa-solid fa-gauge-high"></i> <span id="uiSpeed">1.0x</span></div>
+  </div>
+  <div class="hud-panel hud-right">
+    <div class="hud-label">LEVEL</div>
+    <div class="hud-value text-yellow" id="uiLevel">1</div>
+    <div class="hud-label" style="margin-top:4px;"><i class="fa-solid fa-trophy"></i> <span id="uiHigh">0</span></div>
+  </div>
+</div>
+
+<button class="icon-btn hidden" id="restartBtn"><i class="fa-solid fa-rotate-right"></i></button>
+<button class="icon-btn hidden" id="pauseBtn"><i class="fa-solid fa-pause"></i></button>
+<button class="icon-btn" id="audioBtn" style="position:fixed; bottom:15px; right:15px; z-index:50;"><i class="fa-solid fa-volume-high"></i></button>
+
+<div id="levelUpToast" style="position:fixed; top:20%; left:50%; transform:translate(-50%,-50%) scale(0); font-family:var(--font-display); font-size:30px; color:var(--warning); text-shadow:0 0 15px var(--warning); z-index:50; pointer-events:none; font-weight:900; opacity:0;">LEVEL UP!</div>
+
+<!-- MENU -->
+<div id="menu">
+  <canvas id="menuCubeCanvas"></canvas>
+  <div class="menu-ui">
+    <div class="menu-logo">
+      CUBE<br>RUNNER
+      <span>ENDLESS 3D</span>
+    </div>
+    <div class="menu-btns">
+      <button class="btn btn-play" id="btnPlay"><i class="fa-solid fa-play"></i> JOGAR</button>
+      <div style="display:flex; gap:10px; width:100%;">
+        <button class="btn btn-ghost" id="btnSkins" style="flex:1; margin-bottom:0;"><i class="fa-solid fa-shirt"></i> SKINS</button>
+        <button class="btn btn-ghost" id="btnHelp" style="flex:1; margin-bottom:0;"><i class="fa-solid fa-circle-question"></i> AJUDA</button>
+      </div>
+    </div>
+    <div class="menu-stats">
+      <div class="stat-box">
+        <span class="val" id="menuHighScore">0</span>
+        <span class="lbl">Recorde</span>
+      </div>
+      <div class="stat-box">
+        <span class="val" id="menuGames">0</span>
+        <span class="lbl">Partidas</span>
+      </div>
+      <div class="stat-box">
+        <span class="val" style="color:var(--primary); text-shadow:0 0 10px var(--primary);" id="menuCurrency">0</span>
+        <span class="lbl">Data Cores</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PAUSE -->
+<div class="modal" id="modalPause">
+  <div class="modal-content">
+    <h2 class="text-cyan">PAUSADO</h2>
+    <button class="btn btn-primary" id="btnResume"><i class="fa-solid fa-play"></i> CONTINUAR</button>
+    <button class="btn btn-ghost" id="btnRestartPause"><i class="fa-solid fa-rotate-right"></i> REINICIAR</button>
+    <button class="btn btn-ghost" id="btnMenuPause" style="color:var(--danger); border-color:rgba(255,0,68,0.2);"><i class="fa-solid fa-house"></i> SAIR PARA O MENU</button>
+  </div>
+</div>
+
+<!-- MODAL: CONFIRM QUIT -->
+<div class="modal" id="modalQuit">
+  <div class="modal-content">
+    <h2 style="color:var(--warning); text-shadow:0 0 10px var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> ATENÇÃO</h2>
+    <p style="text-align:center; color:var(--text-dim); font-size:14px; margin-bottom:25px; font-weight:500;">Deseja sair para o menu? O progresso desta partida será perdido.</p>
+    <button class="btn btn-danger" id="btnQuitYes"><i class="fa-solid fa-check"></i> SIM, SAIR</button>
+    <button class="btn btn-ghost" id="btnQuitNo"><i class="fa-solid fa-xmark"></i> CANCELAR</button>
+  </div>
+</div>
+
+<!-- MODAL: CONFIRM RESTART -->
+<div class="modal" id="modalConfirm">
+  <div class="modal-content">
+    <h2 style="color:var(--warning); text-shadow:0 0 10px var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> ATENÇÃO</h2>
+    <p style="text-align:center; color:var(--text-dim); font-size:14px; margin-bottom:25px; font-weight:500;">Deseja reiniciar? O progresso atual será perdido.</p>
+    <button class="btn btn-danger" id="btnConfirmYes"><i class="fa-solid fa-check"></i> SIM, REINICIAR</button>
+    <button class="btn btn-ghost" id="btnConfirmNo"><i class="fa-solid fa-xmark"></i> CANCELAR</button>
+  </div>
+</div>
+
+<!-- MODAL: HELP -->
+<div class="modal" id="modalHelp">
+  <div class="modal-content" style="max-width: 400px;">
+    <h2 class="text-cyan">COMO JOGAR</h2>
+    <div class="help-item">
+      <div class="help-icon"><i class="fa-solid fa-arrows-left-right"></i></div>
+      <div class="help-text">
+        <h4>DESLIZE LATERAL</h4>
+        <p>Arraste para os lados para trocar de faixa.</p>
+      </div>
+    </div>
+    <div class="help-item">
+      <div class="help-icon"><i class="fa-solid fa-arrow-up"></i></div>
+      <div class="help-text">
+        <h4>PULAR</h4>
+        <p>Arraste para cima para saltar sobre blocos baixos (anel verde).</p>
+      </div>
+    </div>
+    <div class="help-item">
+      <div class="help-icon"><i class="fa-solid fa-coins"></i></div>
+      <div class="help-text">
+        <h4>DATA CORES</h4>
+        <p>Colete as moedas que aparecem na pista e sobreviva para ganhar mais moedas ao morrer!</p>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btnCloseHelp" style="margin-top:10px;">ENTENDI</button>
+  </div>
+</div>
+
+<!-- TELA CHEIA: SKINS -->
+<div id="screenSkins">
+  <div class="skins-header">
+    <div class="skins-title"><i class="fa-solid fa-shirt"></i> LOJA DE SKINS</div>
+    <div class="skins-currency"><i class="fa-solid fa-database"></i> <span id="shopCurrency">0</span></div>
+  </div>
+  <div class="skins-body">
+    <div class="skins-list" id="skinList">
+      <!-- Renderizado via JS -->
+    </div>
+    <div class="skin-preview-panel">
+      <canvas id="skinPreviewCanvas"></canvas>
+      <div class="skin-preview-info" id="skinPreviewInfo">
+        <div class="skin-preview-name" id="previewName">Ciano</div>
+        <div class="skin-preview-desc" id="previewDesc">O clássico</div>
+        <button class="skin-action-btn" id="btnBuyEquip">EQUIPAR</button>
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-ghost" id="btnCloseSkins">VOLTAR</button>
+</div>
+
+<!-- MODAL: GAME OVER -->
+<div class="modal" id="modalGameOver">
+  <div class="modal-content">
+    <h2 style="color:var(--danger); text-shadow:0 0 15px var(--danger); margin-bottom:0;">FIM DE JOGO</h2>
+    <div class="go-score" id="goScore">0</div>
+    <div class="go-record"><i class="fa-solid fa-crown"></i> RECORDE: <span id="goHigh">0</span></div>
+    
+    <div class="go-stats-row">
+      <div class="go-stat">
+        <span>Nível</span>
+        <span class="text-yellow" id="goLevel">1</span>
+      </div>
+      <div class="go-stat" style="align-items:flex-end;">
+        <span>Ganhou</span>
+        <span class="text-cyan" id="goEarned">+0 <i class="fa-solid fa-database"></i></span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btnPlayAgain"><i class="fa-solid fa-rotate-right"></i> JOGAR NOVAMENTE</button>
+    <button class="btn btn-ghost" id="btnMenuGameOver"><i class="fa-solid fa-house"></i> MENU PRINCIPAL</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const safeOnClick = (id, fn) => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('click', (e) => { e.preventDefault(); fn(e); });
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); fn(e); }, { passive: false });
+  }
+};
+
+// ============================================================
+// AUDIO MANAGER
+// ============================================================
+class AudioManager {
+  constructor() { this.ctx = null; this.enabled = true; this.masterVolume = 0.3; }
+  init() {
+    if (this.ctx) return;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) this.ctx = new AudioContext();
+  }
+  playTone(freq, type, duration, vol=1) {
+    if (!this.ctx || !this.enabled) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(this.masterVolume * vol, this.ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.start(); osc.stop(this.ctx.currentTime + duration);
+  }
+  jump() { this.playTone(400, 'sine', 0.2, 0.5); setTimeout(() => this.playTone(600, 'sine', 0.2, 0.4), 50); }
+  slide() { this.playTone(300, 'triangle', 0.15, 0.5); this.playTone(200, 'triangle', 0.2, 0.5); }
+  move() { this.playTone(800, 'square', 0.05, 0.1); }
+  score() { this.playTone(1200, 'sine', 0.1, 0.2); }
+  coin() { this.playTone(1500, 'sine', 0.1, 0.3); setTimeout(() => this.playTone(2000, 'sine', 0.15, 0.3), 80); }
+  levelUp() { this.playTone(600, 'square', 0.1, 0.4); setTimeout(() => this.playTone(800, 'square', 0.1, 0.4), 100); setTimeout(() => this.playTone(1000, 'square', 0.3, 0.4), 200); }
+  buy() { this.playTone(800, 'sine', 0.1, 0.4); setTimeout(() => this.playTone(1200, 'sine', 0.2, 0.4), 100); }
+  error() { this.playTone(200, 'square', 0.2, 0.5); }
+  crash() {
+    if (!this.ctx || !this.enabled) return;
+    const bufferSize = this.ctx.sampleRate * 0.5;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = this.ctx.createBufferSource(); noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.4);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(this.masterVolume, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+    noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+    noise.start();
+  }
+}
+const audio = new AudioManager();
+
+// ============================================================
+// DATA MANAGER
+// ============================================================
+const SKINS = [
+  { id: 'default', name: 'Ciano', color: 0x00ffff, emissive: 0x00aaaa, price: 0, desc: 'O clássico' },
+  { id: 'ruby', name: 'Rubi', color: 0xff0044, emissive: 0xaa0022, price: 50, desc: 'Fúria vermelha' },
+  { id: 'emerald', name: 'Esmeralda', color: 0x00ff88, emissive: 0x00aa55, price: 150, desc: 'Energia vital' },
+  { id: 'gold', name: 'Ouro', color: 0xffcc00, emissive: 0xaa8800, price: 300, desc: 'Luxo absoluto' },
+  { id: 'void', name: 'Vazio', color: 0x8800ff, emissive: 0x4400aa, price: 600, desc: 'Poder cósmico' },
+  { id: 'frost', name: 'Gelo', color: 0xffffff, emissive: 0xaaddff, price: 1000, desc: 'Congelante' },
+  { id: 'magma', name: 'Magma', color: 0xff4400, emissive: 0xaa1100, price: 1500, desc: 'Derretendo tudo' },
+  { id: 'cyber', name: 'Cyberpunk', color: 0xff00ff, emissive: 0xaa00aa, price: 2000, desc: 'Neon extremo' },
+  { id: 'toxic', name: 'Tóxico', color: 0x88ff00, emissive: 0x44aa00, price: 2500, desc: 'Radioativo' }
+];
+
+const DataManager = {
+  key: 'cubeRunner_v8',
+  data: { highScore: 0, totalGames: 0, currency: 0, ownedSkins: ['default'], equippedSkin: 'default', settings: { audio: true } },
+  load() { 
+    try { 
+      const s = localStorage.getItem(this.key); 
+      if (s) {
+        const parsed = JSON.parse(s);
+        this.data = { ...this.data, ...parsed }; 
+      }
+    } catch(e){}
+  },
+  save() { 
+    try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch(e){} 
+  }
+};
+DataManager.load();
+audio.enabled = DataManager.data.settings.audio;
+
+// ============================================================
+// UI MANAGER
+// ============================================================
+const UI = {
+  els: {
+    loading: document.getElementById('loading'),
+    loadBar: document.getElementById('loadBar'),
+    loadText: document.getElementById('loadText'),
+    menu: document.getElementById('menu'),
+    hud: document.getElementById('hud'),
+    score: document.getElementById('uiScore'),
+    speed: document.getElementById('uiSpeed'),
+    level: document.getElementById('uiLevel'),
+    high: document.getElementById('uiHigh'),
+    btnPause: document.getElementById('pauseBtn'),
+    btnRestart: document.getElementById('restartBtn'),
+    btnAudio: document.getElementById('audioBtn'),
+    flash: document.getElementById('flash'),
+    levelUpToast: document.getElementById('levelUpToast'),
+    goScore: document.getElementById('goScore'),
+    goHigh: document.getElementById('goHigh'),
+    goLevel: document.getElementById('goLevel'),
+    goEarned: document.getElementById('goEarned'),
+    menuHigh: document.getElementById('menuHighScore'),
+    menuGames: document.getElementById('menuGames'),
+    menuCurrency: document.getElementById('menuCurrency'),
+    shopCurrency: document.getElementById('shopCurrency'),
+    screenSkins: document.getElementById('screenSkins'),
+    skinList: document.getElementById('skinList')
+  },
+  setLoadProgress(p, text) { this.els.loadBar.style.width = p + '%'; if(text) this.els.loadText.textContent = text; },
+  hideLoading() { this.els.loading.classList.add('hidden'); },
+  updateMenuStats() { 
+    this.els.menuHigh.textContent = DataManager.data.highScore; 
+    this.els.menuGames.textContent = DataManager.data.totalGames; 
+    this.els.menuCurrency.textContent = DataManager.data.currency;
+  },
+  showMenu() {
+    this.els.menu.classList.remove('hidden');
+    this.els.hud.classList.remove('active');
+    this.els.btnPause.classList.add('hidden');
+    this.els.btnRestart.classList.add('hidden');
+    this.els.btnAudio.classList.remove('hidden');
+    this.updateMenuStats();
+    
+    document.getElementById('menuCubeCanvas').style.display = 'block';
+    renderer.domElement.style.display = 'none';
+  },
+  showGame() {
+    this.els.menu.classList.add('hidden');
+    this.els.hud.classList.add('active');
+    this.els.btnPause.classList.remove('hidden');
+    this.els.btnRestart.classList.remove('hidden');
+    this.els.btnPause.innerHTML = '<i class="fa-solid fa-pause"></i>';
+    
+    document.getElementById('menuCubeCanvas').style.display = 'none';
+    renderer.domElement.style.display = 'block';
+  },
+  updateHUD(score, speed, level) {
+    this.els.score.textContent = score;
+    this.els.speed.textContent = speed.toFixed(1) + 'x';
+    this.els.level.textContent = level;
+    this.els.high.textContent = DataManager.data.highScore;
+  },
+  showModal(id) { document.getElementById(id).classList.add('active'); },
+  hideModal(id) { document.getElementById(id).classList.remove('active'); },
+  hideAllModals() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); },
+  triggerFlash() {
+    this.els.flash.style.transition = 'none'; this.els.flash.style.opacity = '0.6';
+    setTimeout(() => { this.els.flash.style.transition = 'opacity 0.4s ease'; this.els.flash.style.opacity = '0'; }, 10);
+  },
+  showLevelUp(level) {
+    const t = this.els.levelUpToast; t.textContent = `NÍVEL ${level}`;
+    t.style.transition = 'none'; t.style.transform = 'translate(-50%, -50%) scale(0.8)'; t.style.opacity = '1';
+    setTimeout(() => {
+      t.style.transition = 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; t.style.transform = 'translate(-50%, -50%) scale(1.2)';
+      setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translate(-50%, -50%) scale(1.4)'; }, 800);
+    }, 10);
+  },
+  updateGameOver(score, level, earned) {
+    this.els.goScore.textContent = score; 
+    this.els.goHigh.textContent = DataManager.data.highScore;
+    this.els.goLevel.textContent = level; 
+    this.els.goEarned.innerHTML = `+${earned} <i class="fa-solid fa-database"></i>`;
+  },
+  updateAudioIcon() {
+    if (audio.enabled) {
+      this.els.btnAudio.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+      this.els.btnAudio.style.color = 'var(--primary)';
+    } else {
+      this.els.btnAudio.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+      this.els.btnAudio.style.color = '#666';
+    }
+  }
+};
+
+// ============================================================
+// MENU 3D (Fundo MUITO Mais Animado)
+// ============================================================
+const menuCanvas = document.getElementById('menuCubeCanvas');
+const menuRenderer = new THREE.WebGLRenderer({ canvas: menuCanvas, antialias: true, alpha: true });
+menuRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+menuRenderer.setSize(innerWidth, innerHeight);
+
+const menuScene = new THREE.Scene();
+menuScene.fog = new THREE.FogExp2(0x000510, 0.03);
+const menuCamera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100);
+menuCamera.position.set(0, 2, 10);
+
+const menuGroup = new THREE.Group();
+menuScene.add(menuGroup);
+
+// Cubo central
+const mCube = new THREE.Mesh(
+  new THREE.BoxGeometry(2, 2, 2),
+  new THREE.MeshStandardMaterial({ color: 0x00aaff, emissive: 0x004488, emissiveIntensity: 1.5, metalness: 0.9, roughness: 0.1 })
+);
+menuGroup.add(mCube);
+
+const mWire = new THREE.Mesh(
+  new THREE.BoxGeometry(2.2, 2.2, 2.2),
+  new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.4 })
+);
+menuGroup.add(mWire);
+
+// Anéis orbitando
+const mRings = [];
+for(let i=0; i<3; i++) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(2.5 + i*0.5, 0.03, 8, 64),
+    new THREE.MeshBasicMaterial({ color: [0x00ffff, 0xff00ff, 0xffff00][i], transparent: true, opacity: 0.6 })
+  );
+  ring.rotation.x = Math.PI/2 + i * 0.3;
+  menuGroup.add(ring);
+  mRings.push(ring);
+}
+
+// Chão grid animado do menu
+const mGridHelper = new THREE.GridHelper(100, 100, 0x00ffff, 0x003366);
+mGridHelper.position.y = -3;
+mGridHelper.material.transparent = true;
+mGridHelper.material.opacity = 0.3;
+menuScene.add(mGridHelper);
+
+// Estrelas/Partículas de fundo
+const mStarsGeo = new THREE.BufferGeometry();
+const mStarsPos = new Float32Array(800 * 3);
+for(let i=0; i<mStarsPos.length; i+=3) {
+  mStarsPos[i] = (Math.random()-0.5)*60;
+  mStarsPos[i+1] = (Math.random()-0.5)*40;
+  mStarsPos[i+2] = (Math.random()-0.5)*60;
+}
+mStarsGeo.setAttribute('position', new THREE.BufferAttribute(mStarsPos, 3));
+const mStars = new THREE.Points(mStarsGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.8 }));
+menuScene.add(mStars);
+
+// Luzes
+const mLight1 = new THREE.PointLight(0x00ffff, 50, 30);
+mLight1.position.set(5, 5, 5);
+menuScene.add(mLight1);
+const mLight2 = new THREE.PointLight(0xff00ff, 40, 30);
+mLight2.position.set(-5, -5, 5);
+menuScene.add(mLight2);
+menuScene.add(new THREE.AmbientLight(0x112233, 2));
+
+let menuTime = 0;
+let isMenuActive = true;
+
+function animateMenu() {
+  if (!isMenuActive) return;
+  requestAnimationFrame(animateMenu);
+  menuTime += 0.01;
+
+  // Cubo flutuando e girando
+  menuGroup.rotation.x = Math.sin(menuTime) * 0.2;
+  menuGroup.rotation.y += 0.005;
+  menuGroup.position.y = Math.sin(menuTime * 2) * 0.3;
+
+  // Anéis girando
+  mRings.forEach((r, i) => {
+    r.rotation.z += 0.01 * (i+1);
+    r.rotation.y += 0.008 * (i+1);
+  });
+
+  // Luzes orbitando
+  mLight1.position.x = Math.cos(menuTime * 1.5) * 8;
+  mLight1.position.z = Math.sin(menuTime * 1.5) * 8;
+  mLight2.position.x = Math.cos(menuTime * 1.5 + Math.PI) * 8;
+  mLight2.position.z = Math.sin(menuTime * 1.5 + Math.PI) * 8;
+
+  // Movimento do grid e estrelas
+  mGridHelper.position.z = (menuTime * 5) % 5;
+  mStars.rotation.y = menuTime * 0.05;
+  mStars.rotation.x = Math.sin(menuTime * 0.1) * 0.1;
+
+  menuRenderer.render(menuScene, menuCamera);
+}
+
+// ============================================================
+// SKIN PREVIEW 3D
+// ============================================================
+const previewCanvas = document.getElementById('skinPreviewCanvas');
+const previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: true, alpha: true });
+previewRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+previewRenderer.setSize(previewCanvas.clientWidth, previewCanvas.clientHeight);
+
+const previewScene = new THREE.Scene();
+const previewCamera = new THREE.PerspectiveCamera(50, previewCanvas.clientWidth/previewCanvas.clientHeight, 0.1, 100);
+previewCamera.position.set(0, 0, 7.5);
+
+const previewCube = new THREE.Mesh(
+  new THREE.BoxGeometry(0.70, 0.70, 0.70), // antes era (2, 2, 2)
+  new THREE.MeshStandardMaterial({ metalness: 0.9, roughness: 0.1 })
+);
+previewScene.add(previewCube);
+
+const previewWire = new THREE.Mesh(
+  new THREE.BoxGeometry(0.90, 0.90, 0.90), // antes era (2.2, 2.2, 2.2)
+  new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.5 })
+);
+previewScene.add(previewWire);
+
+const previewLight1 = new THREE.PointLight(0xffffff, 20, 20);
+previewLight1.position.set(5, 5, 5);
+previewScene.add(previewLight1);
+const previewLight2 = new THREE.PointLight(0xffffff, 10, 20);
+previewLight2.position.set(-5, -5, 5);
+previewScene.add(previewLight2);
+previewScene.add(new THREE.AmbientLight(0x222233, 2));
+
+let previewTime = 0;
+let currentPreviewSkin = SKINS[0];
+
+function animatePreview() {
+  requestAnimationFrame(animatePreview);
+  if (!UI.els.screenSkins.classList.contains('active')) return;
+  
+  previewTime += 0.02;
+  previewCube.rotation.x = previewTime * 0.5;
+  previewCube.rotation.y = previewTime * 0.7;
+  previewWire.rotation.x = -previewTime * 0.3;
+  previewWire.rotation.y = -previewTime * 0.4;
+  
+  previewRenderer.render(previewScene, previewCamera);
+}
+
+function updatePreview(skin) {
+  currentPreviewSkin = skin;
+  previewCube.material.color.setHex(skin.color);
+  previewCube.material.emissive.setHex(skin.emissive);
+  previewWire.material.color.setHex(skin.color);
+  previewLight1.color.setHex(skin.color);
+  previewLight2.color.setHex(skin.emissive);
+
+  document.getElementById('previewName').textContent = skin.name;
+  document.getElementById('previewDesc').textContent = skin.desc;
+  
+  const btn = document.getElementById('btnBuyEquip');
+  const isOwned = DataManager.data.ownedSkins.includes(skin.id);
+  const isEquipped = DataManager.data.equippedSkin === skin.id;
+  const canAfford = DataManager.data.currency >= skin.price;
+
+  if (isEquipped) {
+    btn.textContent = 'EQUIPADO';
+    btn.disabled = true;
+    btn.style.background = 'var(--primary)';
+    btn.style.color = '#000';
+  } else if (isOwned) {
+    btn.textContent = 'EQUIPAR';
+    btn.disabled = false;
+    btn.style.background = '#00ffaa';
+    btn.style.color = '#000';
+  } else {
+    btn.textContent = `COMPRAR (${skin.price})`;
+    btn.disabled = !canAfford;
+    btn.style.background = canAfford ? 'var(--warning)' : '#223';
+    btn.style.color = canAfford ? '#000' : '#556';
+  }
+  
+  btn.onclick = () => {
+    if (isEquipped) return;
+    if (isOwned) {
+      DataManager.data.equippedSkin = skin.id;
+      DataManager.save();
+      audio.buy();
+      UI.updateMenuStats();
+      updatePlayerSkin();
+      updatePreview(skin);
+      renderSkinList();
+    } else {
+      if (canAfford) {
+        DataManager.data.currency -= skin.price;
+        DataManager.data.ownedSkins.push(skin.id);
+        DataManager.data.equippedSkin = skin.id;
+        DataManager.save();
+        audio.buy();
+        UI.updateMenuStats();
+        updatePlayerSkin();
+        updatePreview(skin);
+        renderSkinList();
+        document.getElementById('shopCurrency').textContent = DataManager.data.currency;
+      } else {
+        audio.error();
+      }
+    }
+  };
+}
+
+function renderSkinList() {
+  const list = document.getElementById('skinList');
+  list.innerHTML = '';
+  document.getElementById('shopCurrency').textContent = DataManager.data.currency;
+
+  SKINS.forEach(skin => {
+    const isOwned = DataManager.data.ownedSkins.includes(skin.id);
+    const isEquipped = DataManager.data.equippedSkin === skin.id;
+    const isActive = currentPreviewSkin.id === skin.id;
+    const hexColor = '#' + skin.color.toString(16).padStart(6, '0');
+
+    const el = document.createElement('div');
+    el.className = `skin-btn ${isActive ? 'active' : ''} ${!isOwned ? 'locked' : ''}`;
+    
+    let priceHTML = '';
+    if (isEquipped) priceHTML = `<div class="skin-btn-price equipped"><i class="fa-solid fa-check"></i> EQUIPADO</div>`;
+    else if (isOwned) priceHTML = `<div class="skin-btn-price owned">EQUIPAR</div>`;
+    else priceHTML = `<div class="skin-btn-price"><i class="fa-solid fa-database"></i> ${skin.price}</div>`;
+
+    el.innerHTML = `
+      <div class="skin-btn-preview" style="background:${hexColor}; color:${hexColor}"></div>
+      <div class="skin-btn-info">
+        <div class="skin-btn-name">${skin.name}</div>
+        ${priceHTML}
+      </div>
+    `;
+    
+    el.onclick = () => {
+      renderSkinList(); // Remove active de todos
+      el.classList.add('active');
+      updatePreview(skin);
+    };
+    
+    list.appendChild(el);
+  });
+}
+
+// ============================================================
+// GAME ENGINE
+// ============================================================
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000510, 0.012);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 500);
+camera.position.set(0, 7, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.4, 0.5);
+composer.addPass(bloomPass);
+
+function createGridTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#020412';
+  ctx.fillRect(0,0,512,512);
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 8;
+  for(let i=0; i<=512; i+=64) {
+    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,512); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(512,i); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 40);
+  tex.anisotropy = 8;
+  return tex;
+}
+const gridTex = createGridTexture();
+
+scene.add(new THREE.AmbientLight(0x334466, 1.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(5, 20, 10);
+dirLight.castShadow = true;
+dirLight.shadow.camera.left = -20; dirLight.shadow.camera.right = 20;
+dirLight.shadow.camera.top = 20; dirLight.shadow.camera.bottom = -20;
+scene.add(dirLight);
+const pLight1 = new THREE.PointLight(0x00ffff, 3, 30); scene.add(pLight1);
+const pLight2 = new THREE.PointLight(0xff00ff, 3, 30); scene.add(pLight2);
+
+const LANES = [-4, 0, 4];
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(30, 400),
+  new THREE.MeshStandardMaterial({ 
+    map: gridTex, 
+    emissiveMap: gridTex, 
+    emissive: 0x004488, 
+    emissiveIntensity: 1.0, 
+    metalness: 0.8, 
+    roughness: 0.3 
+  })
+);
+floor.rotation.x = -Math.PI/2;
+floor.position.z = -100;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const wallMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 1.5 });
+for(const side of [-1,1]) {
+  const w = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2, 400), wallMat);
+  w.position.set(side * 7.5, 1, -100);
+  scene.add(w);
+}
+
+// Jogador
+const player = new THREE.Group();
+const pBox = new THREE.Mesh(
+  new THREE.BoxGeometry(1.5, 1.5, 1.5),
+  new THREE.MeshStandardMaterial({ metalness: 0.9, roughness: 0.1 })
+);
+pBox.castShadow = true;
+player.add(pBox);
+
+const pAura = new THREE.Mesh(
+  new THREE.BoxGeometry(2, 2, 2),
+  new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.3 })
+);
+player.add(pAura);
+const playerLight = new THREE.PointLight(0xffffff, 4, 15);
+player.add(playerLight);
+scene.add(player);
+
+function updatePlayerSkin() {
+  const equippedId = DataManager.data.equippedSkin;
+  const skin = SKINS.find(s => s.id === equippedId) || SKINS[0];
+  
+  pBox.material.color.setHex(skin.color);
+  pBox.material.emissive.setHex(skin.emissive);
+  pAura.material.color.setHex(skin.color);
+  playerLight.color.setHex(skin.color);
+  
+  mCube.material.color.setHex(skin.color);
+  mCube.material.emissive.setHex(skin.emissive);
+  mWire.material.color.setHex(skin.color);
+  mLight1.color.setHex(skin.color);
+}
+updatePlayerSkin();
+
+const shadow = new THREE.Mesh(
+  new THREE.CircleGeometry(1, 16),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
+);
+shadow.rotation.x = -Math.PI/2;
+shadow.position.y = 0.05;
+scene.add(shadow);
+
+const particles = [];
+const pGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+function spawnParticles(pos, color, count=15) {
+  for(let i=0; i<count; i++) {
+    const mesh = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({ color }));
+    mesh.position.copy(pos);
+    mesh.userData = { vel: new THREE.Vector3((Math.random()-0.5)*0.5, Math.random()*0.5, (Math.random()-0.5)*0.5), life: 1.0 };
+    scene.add(mesh);
+    particles.push(mesh);
+  }
+}
+
+// Moedas
+const coins = [];
+const coinGeo = new THREE.CylinderGeometry(1, 1, 0.3, 16);
+const coinMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xaa8800, emissiveIntensity: 2, metalness: 0.9, roughness: 0.1 });
+
+function spawnCoin(lane, z) {
+  const coin = new THREE.Mesh(coinGeo, coinMat);
+  coin.position.set(lane, 1.0, z);
+  coin.rotation.x = Math.PI/2;
+  scene.add(coin);
+  coins.push(coin);
+}
+
+const starGeo = new THREE.BufferGeometry();
+const sPos = new Float32Array(1500 * 3);
+for(let i=0; i<sPos.length; i+=3) {
+  sPos[i] = (Math.random()-0.5)*200;
+  sPos[i+1] = Math.random()*50 + 10;
+  sPos[i+2] = -Math.random()*400;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color:0xffffff, size:0.6, transparent:true, opacity:0.8}));
+scene.add(stars);
+
+// ============================================================
+// GAME LOGIC
+// ============================================================
+const GAME = {
+  isRunning: false, isPaused: false, isDead: false,
+  score: 0, speedBase: 0.5, speedMax: 3.5, currentSpeed: 0.5,
+  level: 1, laneIndex: 1, targetX: 0,
+  posY: 1.0, velY: 0, isJumping: false, isSliding: false, slideTimer: 0, scaleY: 1.0,
+  smoothX: 0, velX: 0, smoothRotZ: 0,
+  spawnTimer: 0, spawnInterval: 60, obstacles: [],
+  earnedCurrency: 0,
+  coinSpawnTimer: 0,
+
+  reset() {
+    this.score = 0; this.currentSpeed = this.speedBase; this.level = 1;
+    this.laneIndex = 1; this.targetX = 0; this.posY = 1.0; this.velY = 0;
+    this.isJumping = false; this.isSliding = false; this.slideTimer = 0; this.scaleY = 1.0;
+    this.smoothX = 0; this.velX = 0; this.smoothRotZ = 0; this.spawnTimer = 0; this.spawnInterval = 60;
+    this.isDead = false; this.isPaused = false; this.earnedCurrency = 0;
+    this.coinSpawnTimer = 0;
+    
+    this.obstacles.forEach(o => { if(o.userData.marker) scene.remove(o.userData.marker); scene.remove(o); });
+    this.obstacles = [];
+    coins.forEach(c => scene.remove(c)); coins.length = 0;
+    particles.forEach(p => scene.remove(p)); particles.length = 0;
+
+    player.position.set(0, 1.0, 0); player.rotation.set(0,0,0); player.scale.set(1,1,1);
+    UI.updateHUD(0, 1, 1);
+  },
+
+  start() { this.reset(); this.isRunning = true; UI.showGame(); UI.hideAllModals(); audio.init(); },
+  pause() { if(!this.isRunning || this.isDead) return; this.isPaused = true; UI.showModal('modalPause'); },
+  resume() { this.isPaused = false; UI.hideModal('modalPause'); lastTime = performance.now(); },
+
+  die() {
+    if(this.isDead) return;
+    this.isDead = true; this.isRunning = false;
+    
+    audio.crash(); UI.triggerFlash(); shakeTime = 25;
+    spawnParticles(player.position, SKINS.find(s => s.id === DataManager.data.equippedSkin).color, 25);
+    
+    this.earnedCurrency += Math.floor(this.score / 2);
+    DataManager.data.currency += this.earnedCurrency;
+    DataManager.data.totalGames++;
+    
+    if(this.score > DataManager.data.highScore) {
+      DataManager.data.highScore = this.score;
+    }
+    
+    DataManager.save();
+    
+    setTimeout(() => {
+      UI.updateGameOver(this.score, this.level, this.earnedCurrency);
+      UI.showModal('modalGameOver');
+      UI.els.hud.classList.remove('active');
+      UI.els.btnPause.classList.add('hidden');
+      UI.els.btnRestart.classList.add('hidden');
+    }, 800);
+  },
+
+  toMenu() {
+    this.isRunning = false; this.isPaused = false; this.isDead = false; this.reset();
+    UI.hideAllModals(); UI.showMenu(); isMenuActive = true; animateMenu();
+  }
+};
+
+const obstacleMatTall = new THREE.MeshStandardMaterial({ color: 0xff0044, emissive: 0xaa0022, emissiveIntensity: 1.0, metalness: 0.8, roughness: 0.2 });
+const obstacleMatLow = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xaa6600, emissiveIntensity: 1.0, metalness: 0.8, roughness: 0.2 });
+
+function spawnObstacle() {
+  const lane = LANES[Math.floor(Math.random() * 3)];
+  const isLow = Math.random() < 0.4;
+  const h = isLow ? 1 : 3.5;
+  const y = isLow ? 0.5 : 1.75;
+  
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, h, 2.5), isLow ? obstacleMatLow : obstacleMatTall);
+  mesh.position.set(lane, y, -150);
+  mesh.castShadow = true;
+  mesh.userData = { isLow, height: h, y };
+  
+  const wire = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({color:0xffffff, wireframe:true, transparent:true, opacity:0.2}));
+  mesh.add(wire);
+
+  if(isLow) {
+    const marker = new THREE.Mesh(
+      new THREE.RingGeometry(1.5, 1.8, 24),
+      new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+    );
+    marker.rotation.x = -Math.PI/2;
+    marker.position.set(lane, 0.05, -150);
+    scene.add(marker);
+    mesh.userData.marker = marker;
+  }
+
+  scene.add(mesh);
+  GAME.obstacles.push(mesh);
+}
+
+// ============================================================
+// INPUT & LOOP
+// ============================================================
+let tStartX = 0, tStartY = 0, isSwiping = false;
+function processSwipe(dx, dy) {
+  if(!GAME.isRunning || GAME.isPaused) return;
+  const absX = Math.abs(dx), absY = Math.abs(dy);
+  if(Math.max(absX, absY) < 30) return;
+
+  if(absX > absY) {
+    if(dx > 0 && GAME.laneIndex < 2) { GAME.laneIndex++; GAME.targetX = LANES[GAME.laneIndex]; audio.move(); }
+    else if(dx < 0 && GAME.laneIndex > 0) { GAME.laneIndex--; GAME.targetX = LANES[GAME.laneIndex]; audio.move(); }
+  } else {
+    if(dy < 0 && !GAME.isJumping) { GAME.isJumping = true; GAME.velY = 0.45; audio.jump(); }
+    else if(dy > 0 && !GAME.isSliding && !GAME.isJumping) { GAME.isSliding = true; GAME.slideTimer = 35; audio.slide(); }
+  }
+}
+
+document.addEventListener('touchstart', e => {
+  if(!GAME.isRunning || GAME.isPaused) return;
+  tStartX = e.touches[0].clientX; tStartY = e.touches[0].clientY; isSwiping = true;
+}, {passive: true});
+
+document.addEventListener('touchmove', e => {
+  if(!isSwiping || !GAME.isRunning || GAME.isPaused) return;
+  const dx = e.touches[0].clientX - tStartX; const dy = e.touches[0].clientY - tStartY;
+  if(Math.max(Math.abs(dx), Math.abs(dy)) > 40) { processSwipe(dx, dy); isSwiping = false; }
+}, {passive: true});
+
+document.addEventListener('touchend', e => {
+  if(!isSwiping) return;
+  const dx = e.changedTouches[0].clientX - tStartX; const dy = e.changedTouches[0].clientY - tStartY;
+  processSwipe(dx, dy); isSwiping = false;
+}, {passive: true});
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' || e.key.toLowerCase() === 'p') { if(GAME.isPaused) GAME.resume(); else GAME.pause(); return; }
+  if(!GAME.isRunning || GAME.isPaused) return;
+  if(e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') processSwipe(-100, 0);
+  else if(e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') processSwipe(100, 0);
+  else if(e.key === 'ArrowUp' || e.key === ' ' || e.key.toLowerCase() === 'w') processSwipe(0, -100);
+  else if(e.key === 'ArrowDown' || e.key.toLowerCase() === 's') processSwipe(0, 100);
+});
+
+safeOnClick('btnPlay', () => { isMenuActive = false; GAME.start(); });
+safeOnClick('btnPlayAgain', () => GAME.start());
+safeOnClick('btnHelp', () => UI.showModal('modalHelp'));
+safeOnClick('btnCloseHelp', () => UI.hideModal('modalHelp'));
+safeOnClick('btnResume', () => GAME.resume());
+safeOnClick('btnMenuGameOver', () => GAME.toMenu());
+safeOnClick('pauseBtn', () => GAME.pause());
+safeOnClick('btnRestart', () => { GAME.pause(); UI.showModal('modalConfirm'); });
+safeOnClick('btnRestartPause', () => { UI.hideModal('modalPause'); UI.showModal('modalConfirm'); });
+safeOnClick('btnConfirmYes', () => { UI.hideAllModals(); GAME.start(); });
+safeOnClick('btnConfirmNo', () => { UI.hideModal('modalConfirm'); if(!GAME.isDead) GAME.resume(); });
+
+// Menu Pause (Pergunta antes de sair)
+safeOnClick('btnMenuPause', () => {
+  UI.hideModal('modalPause');
+  UI.showModal('modalQuit');
+});
+safeOnClick('btnQuitYes', () => GAME.toMenu());
+safeOnClick('btnQuitNo', () => {
+  UI.hideModal('modalQuit');
+  if(!GAME.isDead) GAME.resume();
+});
+
+// Tela de Skins
+safeOnClick('btnSkins', () => { 
+  renderSkinList(); 
+  updatePreview(SKINS.find(s => s.id === DataManager.data.equippedSkin) || SKINS[0]);
+  UI.els.screenSkins.classList.add('active');
+  previewRenderer.setSize(previewCanvas.clientWidth, previewCanvas.clientHeight);
+});
+safeOnClick('btnCloseSkins', () => UI.els.screenSkins.classList.remove('active'));
+
+safeOnClick('audioBtn', () => {
+  audio.init(); audio.enabled = !audio.enabled;
+  DataManager.data.settings.audio = audio.enabled; DataManager.save(); UI.updateAudioIcon();
+});
+
+let lastTime = performance.now();
+let shakeTime = 0;
+
+function smooth(current, target, factor, dt) {
+  return current + (target - current) * (1 - Math.pow(1 - factor, dt));
+}
+
+function update(dt) {
+  if(!GAME.isRunning || GAME.isPaused) return;
+
+  const targetSpeed = Math.min(GAME.speedMax, GAME.speedBase + GAME.score * 0.015);
+  GAME.currentSpeed = smooth(GAME.currentSpeed, targetSpeed, 0.03, dt);
+  const targetInterval = Math.max(18, 60 - GAME.score * 0.4);
+  GAME.spawnInterval = smooth(GAME.spawnInterval, targetInterval, 0.05, dt);
+
+  const newLevel = Math.floor(GAME.score / 15) + 1;
+  if(newLevel > GAME.level) {
+    GAME.level = newLevel; audio.levelUp(); UI.showLevelUp(GAME.level);
+    UI.updateHUD(GAME.score, GAME.currentSpeed / GAME.speedBase, GAME.level);
+  }
+
+  GAME.velX += (GAME.targetX - GAME.smoothX) * 0.2 * dt;
+  GAME.velX *= Math.pow(0.75, dt);
+  GAME.smoothX += GAME.velX * dt;
+  player.position.x = GAME.smoothX;
+
+  const targetRotZ = Math.max(-0.4, Math.min(0.4, -GAME.velX * 2));
+  GAME.smoothRotZ = smooth(GAME.smoothRotZ, targetRotZ, 0.15, dt);
+  player.rotation.z = GAME.smoothRotZ;
+  player.rotation.x += 0.015 * dt;
+
+  if(GAME.isJumping) {
+    GAME.posY += GAME.velY * dt; GAME.velY -= 0.035 * dt;
+    if(GAME.posY <= 1.0) { GAME.posY = 1.0; GAME.isJumping = false; GAME.velY = 0; }
+  }
+  
+  if(GAME.isSliding) {
+    GAME.slideTimer -= dt; GAME.scaleY = smooth(GAME.scaleY, 0.4, 0.3, dt);
+    if(GAME.slideTimer <= 0) GAME.isSliding = false;
+  } else {
+    GAME.scaleY = smooth(GAME.scaleY, 1.0, 0.25, dt);
+  }
+
+  player.position.y = GAME.posY; player.scale.y = GAME.scaleY;
+
+  shadow.position.x = GAME.smoothX;
+  const shScale = Math.max(0.3, 1.0 - (GAME.posY - 1.0) * 0.15);
+  shadow.scale.setScalar(shScale); shadow.material.opacity = 0.6 * shScale;
+
+  const camTargetX = GAME.smoothX * 0.3; const camTargetY = 7 + (GAME.posY - 1.0) * 0.3;
+  camera.position.x = smooth(camera.position.x, camTargetX, 0.05, dt);
+  camera.position.y = smooth(camera.position.y, camTargetY, 0.06, dt);
+  camera.lookAt(GAME.smoothX * 0.5, GAME.posY * 0.5, -10);
+
+  // Spawn de Obstáculos
+  GAME.spawnTimer += dt;
+  if(GAME.spawnTimer >= GAME.spawnInterval) {
+    GAME.spawnTimer = 0; spawnObstacle();
+    if(GAME.level > 2 && Math.random() < 0.3) setTimeout(spawnObstacle, 50);
+  }
+
+  // Spawn de Moedas
+  GAME.coinSpawnTimer += dt;
+  if (GAME.coinSpawnTimer > 80) {
+    GAME.coinSpawnTimer = 0;
+    if (Math.random() < 0.5) { // 50% de chance de aparecer um grupo de moedas
+      const lane = LANES[Math.floor(Math.random() * 3)];
+      for(let i=0; i<3; i++) spawnCoin(lane, -150 - i*3);
+    }
+  }
+
+  // Update Obstáculos
+  for(let i = GAME.obstacles.length - 1; i >= 0; i--) {
+    const obs = GAME.obstacles[i];
+    obs.position.z += GAME.currentSpeed * dt * 1.8; obs.rotation.y += 0.02 * dt;
+    if(obs.userData.marker) obs.userData.marker.position.z = obs.position.z;
+
+    const dx = Math.abs(obs.position.x - player.position.x); const dz = Math.abs(obs.position.z - player.position.z);
+    if(dx < 1.5 && dz < 1.5) {
+      let passed = false;
+      if(GAME.isJumping || GAME.posY > 1.2) {
+        if(obs.userData.isLow && (GAME.posY - 0.75 * GAME.scaleY) > (obs.userData.y + obs.userData.height/2 - 0.2)) passed = true;
+      }
+      if(!passed) { GAME.die(); return; }
+    }
+
+    if(obs.position.z > 10) {
+      if(obs.userData.marker) scene.remove(obs.userData.marker);
+      scene.remove(obs); GAME.obstacles.splice(i, 1);
+      GAME.score++; audio.score(); UI.updateHUD(GAME.score, GAME.currentSpeed / GAME.speedBase, GAME.level);
+    }
+  }
+
+  // Update Moedas
+  for(let i = coins.length - 1; i >= 0; i--) {
+    const c = coins[i];
+    c.position.z += GAME.currentSpeed * dt * 1.8;
+    c.rotation.z += 0.05 * dt;
+    
+    const dx = Math.abs(c.position.x - player.position.x);
+    const dz = Math.abs(c.position.z - player.position.z);
+    const dy = Math.abs(c.position.y - player.position.y);
+    
+    if(dx < 1.5 && dz < 1.5 && dy < 2.0) {
+      // Coletou moeda
+      audio.coin();
+      GAME.earnedCurrency += 1;
+      scene.remove(c);
+      coins.splice(i, 1);
+    } else if(c.position.z > 10) {
+      scene.remove(c);
+      coins.splice(i, 1);
+    }
+  }
+
+  for(let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.position.add(p.userData.vel); p.userData.vel.y -= 0.02;
+    p.rotation.x += 0.1; p.rotation.y += 0.1;
+    p.userData.life -= 0.02 * dt; p.scale.setScalar(p.userData.life);
+    if(p.userData.life <= 0) { scene.remove(p); particles.splice(i, 1); }
+  }
+
+  pLight1.position.set(player.position.x - 3, 3, player.position.z + 2);
+  pLight2.position.set(player.position.x + 3, 3, player.position.z - 5);
+
+  if(shakeTime > 0) {
+    shakeTime -= dt; const int = (shakeTime / 25) * 0.4;
+    camera.position.x += (Math.random() - 0.5) * int;
+    camera.position.y += (Math.random() - 0.5) * int;
+  }
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 16.667, 3);
+  lastTime = now;
+
+  if(GAME.isRunning && !GAME.isPaused) {
+    update(dt);
+    stars.rotation.y += 0.0005 * dt;
+    pAura.rotation.y += 0.02 * dt; pAura.rotation.x += 0.01 * dt;
+    pAura.material.opacity = 0.2 + Math.sin(now * 0.005) * 0.1;
+  }
+
+  if(GAME.isRunning) composer.render();
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  menuCamera.aspect = innerWidth / innerHeight; menuCamera.updateProjectionMatrix();
+  menuRenderer.setSize(innerWidth, innerHeight);
+  
+  if (UI.els.screenSkins.classList.contains('active')) {
+    previewCamera.aspect = previewCanvas.clientWidth / previewCanvas.clientHeight;
+    previewCamera.updateProjectionMatrix();
+    previewRenderer.setSize(previewCanvas.clientWidth, previewCanvas.clientHeight);
+  }
+});
+
+async function init() {
+  UI.setLoadProgress(20, 'Iniciando motor...'); await new Promise(r => setTimeout(r, 200));
+  UI.setLoadProgress(60, 'Gerando cenário...'); await new Promise(r => setTimeout(r, 300));
+  UI.setLoadProgress(90, 'Sincronizando áudio...'); await new Promise(r => setTimeout(r, 200));
+  UI.setLoadProgress(100, 'Pronto!');
+  
+  UI.updateMenuStats(); UI.updateAudioIcon(); UI.els.high.textContent = DataManager.data.highScore;
+  
+  animateMenu(); animate(); animatePreview();
+  
+  renderer.domElement.style.display = 'none';
+  
+  setTimeout(() => { UI.hideLoading(); }, 500);
+}
+
+init();
+</script>
+</body>
+</html>
